@@ -1,0 +1,1049 @@
+openapi: 3.0.3
+info:
+  title: Food Delivery Platform API
+  description: |
+    A comprehensive API specification for the Food Delivery Platform, featuring three main microservices:
+    - **Order Service**: Order management and payment processing
+    - **Menu Service**: Restaurant and menu item management
+    - **Tracking Service**: Real-time GPS tracking and delivery management
+    
+    ## Architecture
+    This platform uses an event-driven microservices architecture with:
+    - PostgreSQL for data persistence
+    - Redis for caching
+    - RabbitMQ for asynchronous messaging
+    - SignalR for real-time WebSocket communication
+    
+    ## Base URLs
+    - Order Service: `http://localhost:5075`
+    - Menu Service: `http://localhost:5284`
+    - Tracking Service: `http://localhost:5173`
+  version: 1.0.0
+  contact:
+    name: Food Delivery Platform Team
+    email: support@fooddelivery.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:5075
+    description: Order Service - Local Development
+  - url: http://localhost:5284
+    description: Menu Service - Local Development
+  - url: http://localhost:5173
+    description: Tracking Service - Local Development
+
+tags:
+  - name: Orders
+    description: Order creation, management, and payment operations
+  - name: Restaurants
+    description: Restaurant and menu item management operations
+  - name: Tracking
+    description: Real-time GPS tracking and delivery management
+  - name: Drivers
+    description: Driver location and status management
+
+paths:
+  # ============================================
+  # ORDER SERVICE ENDPOINTS
+  # ============================================
+  
+  /api/orders:
+    post:
+      tags:
+        - Orders
+      summary: Create a new order
+      description: Creates a new order for a customer with specified menu items
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderCommand'
+            example:
+              customerId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+              restaurantId: "3fa85f64-5717-4562-b3fc-2c963f66afa7"
+              deliveryAddress: "123 Main St, Apt 4B, New York, NY 10001"
+              items:
+                - menuItemId: "3fa85f64-5717-4562-b3fc-2c963f66afa8"
+                  name: "Margherita Pizza"
+                  quantity: 2
+                  unitPrice: 12.99
+                - menuItemId: "3fa85f64-5717-4562-b3fc-2c963f66afa9"
+                  name: "Caesar Salad"
+                  quantity: 1
+                  unitPrice: 8.99
+      responses:
+        '201':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orderId:
+                    type: string
+                    format: uuid
+                    example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/orders/{id}:
+    get:
+      tags:
+        - Orders
+      summary: Get order by ID
+      description: Retrieves detailed information about a specific order
+      operationId: getOrder
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Order details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/orders/customer/{customerId}:
+    get:
+      tags:
+        - Orders
+      summary: Get customer orders
+      description: Retrieves paginated list of orders for a specific customer
+      operationId: getCustomerOrders
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          description: Customer unique identifier
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Customer orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OrderDto'
+                  pageNumber:
+                    type: integer
+                    example: 1
+                  pageSize:
+                    type: integer
+                    example: 10
+                  totalCount:
+                    type: integer
+                    example: 45
+                  totalPages:
+                    type: integer
+                    example: 5
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/orders/{id}/payment:
+    post:
+      tags:
+        - Orders
+      summary: Process payment for order
+      description: Processes payment for an order using the specified payment method
+      operationId: processPayment
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessPaymentRequest'
+            example:
+              paymentMethod: "CreditCard"
+      responses:
+        '200':
+          description: Payment processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Payment processed successfully"
+                  transactionId:
+                    type: string
+                    example: "TXN-1234567890"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/orders/{id}/cancel:
+    post:
+      tags:
+        - Orders
+      summary: Cancel an order
+      description: Cancels an existing order and processes refund if payment was made
+      operationId: cancelOrder
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelOrderRequest'
+            example:
+              reason: "Changed my mind"
+      responses:
+        '200':
+          description: Order cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Order cancelled successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/orders/{id}/assign-driver:
+    post:
+      tags:
+        - Orders
+      summary: Assign driver to order
+      description: Assigns a delivery driver to an order
+      operationId: assignDriver
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignDriverRequest'
+            example:
+              driverId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+      responses:
+        '200':
+          description: Driver assigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Driver assigned successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ============================================
+  # MENU SERVICE ENDPOINTS
+  # ============================================
+
+  /api/restaurants:
+    post:
+      tags:
+        - Restaurants
+      summary: Create a new restaurant
+      description: Creates a new restaurant with specified details
+      operationId: createRestaurant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRestaurantCommand'
+            example:
+              name: "Pizza Palace"
+              description: "Best authentic Italian pizza in town"
+              address: "456 Restaurant Ave, New York, NY 10002"
+              phoneNumber: "+1-555-123-4567"
+              openingTime: "09:00:00"
+              closingTime: "22:00:00"
+              deliveryFee: 4.99
+              minimumOrderAmount: 15.00
+              estimatedPreparationTimeMinutes: 30
+      responses:
+        '201':
+          description: Restaurant created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  restaurantId:
+                    type: string
+                    format: uuid
+                    example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    get:
+      tags:
+        - Restaurants
+      summary: Get active restaurants
+      description: Retrieves paginated list of active restaurants with caching
+      operationId: getActiveRestaurants
+      parameters:
+        - $ref: '#/components/parameters/PageNumber'
+        - name: pageSize
+          in: query
+          required: false
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Active restaurants retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RestaurantDto'
+                  pageNumber:
+                    type: integer
+                    example: 1
+                  pageSize:
+                    type: integer
+                    example: 20
+                  totalCount:
+                    type: integer
+                    example: 150
+                  totalPages:
+                    type: integer
+                    example: 8
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/restaurants/{id}:
+    get:
+      tags:
+        - Restaurants
+      summary: Get restaurant by ID
+      description: Retrieves detailed information about a specific restaurant including menu items (cached)
+      operationId: getRestaurant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Restaurant unique identifier
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Restaurant details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/restaurants/{restaurantId}/menu-items:
+    post:
+      tags:
+        - Restaurants
+      summary: Add menu item to restaurant
+      description: Adds a new menu item to an existing restaurant
+      operationId: addMenuItem
+      parameters:
+        - name: restaurantId
+          in: path
+          required: true
+          description: Restaurant unique identifier
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMenuItemRequest'
+            example:
+              name: "Margherita Pizza"
+              description: "Classic pizza with fresh mozzarella and basil"
+              price: 12.99
+              category: "Pizza"
+              imageUrl: "https://example.com/images/margherita.jpg"
+      responses:
+        '201':
+          description: Menu item added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  menuItemId:
+                    type: string
+                    format: uuid
+                    example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ============================================
+  # TRACKING SERVICE ENDPOINTS
+  # ============================================
+
+  /api/drivers/{driverId}/location:
+    post:
+      tags:
+        - Drivers
+      summary: Update driver location
+      description: Updates the GPS location of a driver in real-time
+      operationId: updateDriverLocation
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          description: Driver unique identifier
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationDto'
+            example:
+              latitude: 40.7128
+              longitude: -74.0060
+              timestamp: "2025-12-28T10:30:00Z"
+      responses:
+        '200':
+          description: Driver location updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Location updated successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/tracking/order/{orderId}:
+    get:
+      tags:
+        - Tracking
+      summary: Get delivery tracking by order ID
+      description: Retrieves real-time delivery tracking information for a specific order
+      operationId: getDeliveryTracking
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          description: Order unique identifier
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Delivery tracking retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryTrackingDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/tracking/drivers/available:
+    get:
+      tags:
+        - Tracking
+      summary: Get available drivers
+      description: Retrieves list of all currently available drivers for order assignment
+      operationId: getAvailableDrivers
+      responses:
+        '200':
+          description: Available drivers retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DriverDto'
+              example:
+                - id: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                  name: "John Doe"
+                  phoneNumber: "+1-555-987-6543"
+                  vehicleNumber: "ABC-123"
+                  status: "Available"
+                  currentLocation:
+                    latitude: 40.7128
+                    longitude: -74.0060
+                    timestamp: "2025-12-28T10:30:00Z"
+                  currentOrderId: null
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    # ============================================
+    # ORDER SERVICE SCHEMAS
+    # ============================================
+    
+    CreateOrderCommand:
+      type: object
+      required:
+        - customerId
+        - restaurantId
+        - deliveryAddress
+        - items
+      properties:
+        customerId:
+          type: string
+          format: uuid
+          description: Customer unique identifier
+        restaurantId:
+          type: string
+          format: uuid
+          description: Restaurant unique identifier
+        deliveryAddress:
+          type: string
+          description: Full delivery address
+          minLength: 10
+          maxLength: 500
+        items:
+          type: array
+          description: List of order items
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/OrderItemCommand'
+
+    OrderItemCommand:
+      type: object
+      required:
+        - menuItemId
+        - name
+        - quantity
+        - unitPrice
+      properties:
+        menuItemId:
+          type: string
+          format: uuid
+          description: Menu item unique identifier
+        name:
+          type: string
+          description: Menu item name
+        quantity:
+          type: integer
+          minimum: 1
+          description: Quantity ordered
+        unitPrice:
+          type: number
+          format: decimal
+          minimum: 0.01
+          description: Unit price per item
+
+    OrderDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        restaurantId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        totalAmount:
+          type: number
+          format: decimal
+          description: Total order amount including all items
+        deliveryAddress:
+          type: string
+        driverId:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItemDto'
+
+    OrderItemDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        menuItemId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+          format: decimal
+
+    OrderStatus:
+      type: string
+      enum:
+        - Pending
+        - PaymentProcessing
+        - PaymentConfirmed
+        - PaymentFailed
+        - Confirmed
+        - Preparing
+        - ReadyForPickup
+        - OutForDelivery
+        - Delivered
+        - Cancelled
+        - Refunded
+      description: Current status of the order
+
+    ProcessPaymentRequest:
+      type: object
+      required:
+        - paymentMethod
+      properties:
+        paymentMethod:
+          type: string
+          description: Payment method (CreditCard, DebitCard, Cash, etc.)
+          example: "CreditCard"
+
+    CancelOrderRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          description: Reason for order cancellation
+          minLength: 3
+          maxLength: 500
+
+    AssignDriverRequest:
+      type: object
+      required:
+        - driverId
+      properties:
+        driverId:
+          type: string
+          format: uuid
+          description: Driver unique identifier
+
+    # ============================================
+    # MENU SERVICE SCHEMAS
+    # ============================================
+
+    CreateRestaurantCommand:
+      type: object
+      required:
+        - name
+        - description
+        - address
+        - phoneNumber
+        - openingTime
+        - closingTime
+        - deliveryFee
+        - minimumOrderAmount
+        - estimatedPreparationTimeMinutes
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 200
+          description: Restaurant name
+        description:
+          type: string
+          maxLength: 1000
+          description: Restaurant description
+        address:
+          type: string
+          minLength: 10
+          maxLength: 500
+          description: Restaurant address
+        phoneNumber:
+          type: string
+          pattern: '^\+?[1-9]\d{1,14}$'
+          description: Restaurant phone number
+        openingTime:
+          type: string
+          format: time
+          pattern: '^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$'
+          description: Opening time (HH:mm:ss format)
+          example: "09:00:00"
+        closingTime:
+          type: string
+          format: time
+          pattern: '^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$'
+          description: Closing time (HH:mm:ss format)
+          example: "22:00:00"
+        deliveryFee:
+          type: number
+          format: decimal
+          minimum: 0
+          description: Delivery fee charged by restaurant
+        minimumOrderAmount:
+          type: number
+          format: decimal
+          minimum: 0
+          description: Minimum order amount required
+        estimatedPreparationTimeMinutes:
+          type: integer
+          minimum: 1
+          maximum: 300
+          description: Estimated preparation time in minutes
+
+    RestaurantDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        address:
+          type: string
+        phoneNumber:
+          type: string
+        status:
+          $ref: '#/components/schemas/RestaurantStatus'
+        openingTime:
+          type: string
+          format: time
+        closingTime:
+          type: string
+          format: time
+        deliveryFee:
+          type: number
+          format: decimal
+        minimumOrderAmount:
+          type: number
+          format: decimal
+        estimatedPreparationTimeMinutes:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        menuItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuItemDto'
+
+    RestaurantStatus:
+      type: string
+      enum:
+        - Closed
+        - Open
+        - Busy
+        - TemporarilyClosed
+        - PermanentlyClosed
+      description: Current status of the restaurant
+
+    AddMenuItemRequest:
+      type: object
+      required:
+        - name
+        - description
+        - price
+        - category
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 200
+          description: Menu item name
+        description:
+          type: string
+          maxLength: 1000
+          description: Menu item description
+        price:
+          type: number
+          format: decimal
+          minimum: 0.01
+          description: Menu item price
+        category:
+          type: string
+          minLength: 2
+          maxLength: 100
+          description: Menu item category (e.g., Pizza, Pasta, Salads)
+        imageUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: URL to menu item image
+
+    MenuItemDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        restaurantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+          format: decimal
+        category:
+          type: string
+        imageUrl:
+          type: string
+          format: uri
+          nullable: true
+        isAvailable:
+          type: boolean
+          description: Whether the menu item is currently available
+
+    # ============================================
+    # TRACKING SERVICE SCHEMAS
+    # ============================================
+
+    LocationDto:
+      type: object
+      required:
+        - latitude
+        - longitude
+      properties:
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          description: GPS latitude coordinate
+          example: 40.7128
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          description: GPS longitude coordinate
+          example: -74.0060
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of location update
+
+    DriverDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Driver name
+        phoneNumber:
+          type: string
+          description: Driver phone number
+        vehicleNumber:
+          type: string
+          description: Vehicle registration number
+        status:
+          $ref: '#/components/schemas/DriverStatus'
+        currentLocation:
+          $ref: '#/components/schemas/LocationDto'
+          nullable: true
+        currentOrderId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Currently assigned order ID
+
+    DriverStatus:
+      type: string
+      enum:
+        - Offline
+        - Available
+        - Busy
+        - OnBreak
+        - Inactive
+      description: Current status of the driver
+
+    DeliveryTrackingDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        driverId:
+          type: string
+          format: uuid
+        pickupLocation:
+          $ref: '#/components/schemas/LocationDto'
+        deliveryLocation:
+          $ref: '#/components/schemas/LocationDto'
+        currentLocation:
+          $ref: '#/components/schemas/LocationDto'
+          nullable: true
+        pickedUpAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when order was picked up
+        deliveredAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when order was delivered
+        estimatedDistanceKm:
+          type: number
+          format: double
+          nullable: true
+          description: Estimated distance in kilometers
+        distanceFromDelivery:
+          type: number
+          format: double
+          nullable: true
+          description: Current distance from delivery location in kilometers
+
+    # ============================================
+    # ERROR SCHEMAS
+    # ============================================
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        details:
+          type: string
+          description: Detailed error information
+        timestamp:
+          type: string
+          format: date-time
+        path:
+          type: string
+          description: Request path that caused the error
+
+  parameters:
+    OrderId:
+      name: id
+      in: path
+      required: true
+      description: Order unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    PageNumber:
+      name: pageNumber
+      in: query
+      required: false
+      description: Page number for pagination
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      description: Number of items per page
+      schema:
+        type: integer
+        default: 10
+        minimum: 1
+        maximum: 100
+
+  responses:
+    BadRequest:
+      description: Bad request - Invalid input parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Validation failed"
+            details: "Delivery address is required"
+            timestamp: "2025-12-28T10:30:00Z"
+            path: "/api/orders"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Not found"
+            details: "Order with ID '3fa85f64-5717-4562-b3fc-2c963f66afa6' not found"
+            timestamp: "2025-12-28T10:30:00Z"
+            path: "/api/orders/3fa85f64-5717-4562-b3fc-2c963f66afa6"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Internal server error"
+            details: "An unexpected error occurred while processing your request"
+            timestamp: "2025-12-28T10:30:00Z"
+            path: "/api/orders"

@@ -1,0 +1,49 @@
+# Tracking Service Dockerfile
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+WORKDIR /app
+EXPOSE 80
+
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+# Copy solution file
+COPY ["FoodDelivery.sln", "./"]
+
+# Copy all project files
+COPY ["src/BuildingBlocks/Common/Common.Application/Common.Application.csproj", "src/BuildingBlocks/Common/Common.Application/"]
+COPY ["src/BuildingBlocks/Common/Common.Caching/Common.Caching.csproj", "src/BuildingBlocks/Common/Common.Caching/"]
+COPY ["src/BuildingBlocks/Common/Common.Contracts/Common.Contracts.csproj", "src/BuildingBlocks/Common/Common.Contracts/"]
+COPY ["src/BuildingBlocks/Common/Common.Database/Common.Database.csproj", "src/BuildingBlocks/Common/Common.Database/"]
+COPY ["src/BuildingBlocks/Common/Common.Domain/Common.Domain.csproj", "src/BuildingBlocks/Common/Common.Domain/"]
+
+COPY ["src/Services/Tracking/Tracking.API/Tracking.API.csproj", "src/Services/Tracking/Tracking.API/"]
+COPY ["src/Services/Tracking/Tracking.Application/Tracking.Application.csproj", "src/Services/Tracking/Tracking.Application/"]
+COPY ["src/Services/Tracking/Tracking.Domain/Tracking.Domain.csproj", "src/Services/Tracking/Tracking.Domain/"]
+COPY ["src/Services/Tracking/Tracking.Infrastructure/Tracking.Infrastructure.csproj", "src/Services/Tracking/Tracking.Infrastructure/"]
+COPY ["src/Services/Tracking/Tracking.Hub/Tracking.Hub.csproj", "src/Services/Tracking/Tracking.Hub/"]
+
+# Restore dependencies
+RUN dotnet restore "src/Services/Tracking/Tracking.API/Tracking.API.csproj"
+
+# Copy everything else
+COPY . .
+
+# Build the application
+WORKDIR "/src/src/Services/Tracking/Tracking.API"
+RUN dotnet build "Tracking.API.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "Tracking.API.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+FROM base AS final
+WORKDIR /app
+
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+COPY --from=publish /app/publish .
+
+# Create directory for logs
+RUN mkdir -p /app/logs
+
+ENTRYPOINT ["dotnet", "Tracking.API.dll"]

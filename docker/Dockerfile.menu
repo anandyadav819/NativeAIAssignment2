@@ -1,0 +1,49 @@
+# Menu Service Dockerfile
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+WORKDIR /app
+EXPOSE 80
+
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+# Copy solution file
+COPY ["FoodDelivery.sln", "./"]
+
+# Copy all project files
+COPY ["src/BuildingBlocks/Common/Common.Application/Common.Application.csproj", "src/BuildingBlocks/Common/Common.Application/"]
+COPY ["src/BuildingBlocks/Common/Common.Caching/Common.Caching.csproj", "src/BuildingBlocks/Common/Common.Caching/"]
+COPY ["src/BuildingBlocks/Common/Common.Contracts/Common.Contracts.csproj", "src/BuildingBlocks/Common/Common.Contracts/"]
+COPY ["src/BuildingBlocks/Common/Common.Database/Common.Database.csproj", "src/BuildingBlocks/Common/Common.Database/"]
+COPY ["src/BuildingBlocks/Common/Common.Domain/Common.Domain.csproj", "src/BuildingBlocks/Common/Common.Domain/"]
+COPY ["src/BuildingBlocks/Common/Common.Observability/Common.Observability.csproj", "src/BuildingBlocks/Common/Common.Observability/"]
+
+COPY ["src/Services/Menu/Menu.API/Menu.API.csproj", "src/Services/Menu/Menu.API/"]
+COPY ["src/Services/Menu/Menu.Application/Menu.Application.csproj", "src/Services/Menu/Menu.Application/"]
+COPY ["src/Services/Menu/Menu.Domain/Menu.Domain.csproj", "src/Services/Menu/Menu.Domain/"]
+COPY ["src/Services/Menu/Menu.Infrastructure/Menu.Infrastructure.csproj", "src/Services/Menu/Menu.Infrastructure/"]
+
+# Restore dependencies
+RUN dotnet restore "src/Services/Menu/Menu.API/Menu.API.csproj"
+
+# Copy everything else
+COPY . .
+
+# Build the application
+WORKDIR "/src/src/Services/Menu/Menu.API"
+RUN dotnet build "Menu.API.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "Menu.API.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+FROM base AS final
+WORKDIR /app
+
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+COPY --from=publish /app/publish .
+
+# Create directory for logs
+RUN mkdir -p /app/logs
+
+ENTRYPOINT ["dotnet", "Menu.API.dll"]

@@ -1,0 +1,53 @@
+# Ignore build artifacts
+**/bin/
+**/obj/
+**/out/
+
+# Ignore test projects
+**/tests/
+**/*.UnitTests/
+**/*.IntegrationTests/
+
+# Ignore Visual Studio files
+.vs/
+*.user
+*.suo
+*.sln.docstates
+
+# Ignore logs
+**/logs/
+*.log
+
+# Ignore git
+.git/
+.gitignore
+.gitattributes
+
+# Ignore Docker files
+**/.dockerignore
+**/docker-compose*
+**/Dockerfile*
+
+# Ignore documentation
+**/*.md
+**/docs/
+
+# Ignore secrets and config
+**/appsettings.Development.json
+**/appsettings.Local.json
+
+# Ignore NuGet packages
+*.nupkg
+
+# Ignore IDE settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore node modules (if any)
+**/node_modules/

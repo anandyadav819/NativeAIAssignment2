@@ -1,0 +1,36 @@
+# Docker Compose Override for Development
+# This file is automatically merged with docker-compose.yml
+# Used for development-specific configurations
+
+version: '3.8'
+
+services:
+  order-api:
+    volumes:
+      # Mount source code for hot reload (if needed)
+      - ./src/Services/Order/Order.API:/src/Order.API:ro
+      # Mount logs directory
+      - ./logs/order:/app/logs
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Logging__LogLevel__Default=Information
+      - Logging__LogLevel__Microsoft=Warning
+
+  menu-api:
+    volumes:
+      - ./src/Services/Menu/Menu.API:/src/Menu.API:ro
+      - ./logs/menu:/app/logs
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Logging__LogLevel__Default=Information
+      - Logging__LogLevel__Microsoft=Warning
+
+  tracking-api:
+    volumes:
+      - ./src/Services/Tracking/Tracking.API:/src/Tracking.API:ro
+      - ./logs/tracking:/app/logs
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Logging__LogLevel__Default=Information
+      - Logging__LogLevel__Microsoft=Warning
+      - Logging__LogLevel__Microsoft.AspNetCore.SignalR=Information
