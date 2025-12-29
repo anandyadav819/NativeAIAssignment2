@@ -1,0 +1,19 @@
+[
+  {
+    "Name": "New Profile",
+    "Projects": [
+      {
+        "Path": "src\\Services\\Menu\\Menu.API\\Menu.API.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Order\\Order.API\\Order.API.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Tracking\\Tracking.API\\Tracking.API.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

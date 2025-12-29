@@ -1,0 +1,53 @@
+# Order Service Dockerfile
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+WORKDIR /app
+EXPOSE 80
+
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+# Copy solution file
+COPY ["FoodDelivery.sln", "./"]
+
+# Copy all project files
+COPY ["src/BuildingBlocks/Common/Common.Application/Common.Application.csproj", "src/BuildingBlocks/Common/Common.Application/"]
+COPY ["src/BuildingBlocks/Common/Common.Caching/Common.Caching.csproj", "src/BuildingBlocks/Common/Common.Caching/"]
+COPY ["src/BuildingBlocks/Common/Common.Contracts/Common.Contracts.csproj", "src/BuildingBlocks/Common/Common.Contracts/"]
+COPY ["src/BuildingBlocks/Common/Common.Database/Common.Database.csproj", "src/BuildingBlocks/Common/Common.Database/"]
+COPY ["src/BuildingBlocks/Common/Common.Domain/Common.Domain.csproj", "src/BuildingBlocks/Common/Common.Domain/"]
+COPY ["src/BuildingBlocks/Common/Common.EventBus/Common.EventBus.csproj", "src/BuildingBlocks/Common/Common.EventBus/"]
+COPY ["src/BuildingBlocks/Common/Common.Messaging/Common.Messaging.csproj", "src/BuildingBlocks/Common/Common.Messaging/"]
+COPY ["src/BuildingBlocks/Common/Common.Observability/Common.Observability.csproj", "src/BuildingBlocks/Common/Common.Observability/"]
+COPY ["src/BuildingBlocks/Common/Common.Resilience/Common.Resilience.csproj", "src/BuildingBlocks/Common/Common.Resilience/"]
+
+COPY ["src/Services/Order/Order.API/Order.API.csproj", "src/Services/Order/Order.API/"]
+COPY ["src/Services/Order/Order.Application/Order.Application.csproj", "src/Services/Order/Order.Application/"]
+COPY ["src/Services/Order/Order.Domain/Order.Domain.csproj", "src/Services/Order/Order.Domain/"]
+COPY ["src/Services/Order/Order.Infrastructure/Order.Infrastructure.csproj", "src/Services/Order/Order.Infrastructure/"]
+COPY ["src/Services/Order/Order.Worker/Order.Worker.csproj", "src/Services/Order/Order.Worker/"]
+
+# Restore dependencies
+RUN dotnet restore "src/Services/Order/Order.API/Order.API.csproj"
+
+# Copy everything else
+COPY . .
+
+# Build the application
+WORKDIR "/src/src/Services/Order/Order.API"
+RUN dotnet build "Order.API.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "Order.API.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+FROM base AS final
+WORKDIR /app
+
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+COPY --from=publish /app/publish .
+
+# Create directory for logs
+RUN mkdir -p /app/logs
+
+ENTRYPOINT ["dotnet", "Order.API.dll"]
